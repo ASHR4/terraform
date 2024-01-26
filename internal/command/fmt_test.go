@@ -16,11 +16,11 @@ import (
 	"github.com/hashicorp/cli"
 )
 
-func TestFmt_TestFiles(t *testing.T) {
-	const inSuffix = "_in.tftest.hcl"
-	const outSuffix = "_out.tftest.hcl"
-	const gotSuffix = "_got.tftest.hcl"
-	entries, err := ioutil.ReadDir("testdata/tftest-fmt")
+func TestFmt_MockFiles(t *testing.T) {
+	const inSuffix = "_in.tfmock.hcl"
+	const outSuffix = "_out.tfmock.hcl"
+	const gotSuffix = "_got.tfmock.hcl"
+	entries, err := ioutil.ReadDir("testdata/fmt-tfmock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +40,72 @@ func TestFmt_TestFiles(t *testing.T) {
 		}
 		testName := filename[:len(filename)-len(inSuffix)]
 		t.Run(testName, func(t *testing.T) {
-			inFile := filepath.Join("testdata", "tftest-fmt", testName+inSuffix)
-			wantFile := filepath.Join("testdata", "tftest-fmt", testName+outSuffix)
+			inFile := filepath.Join("testdata", "fmt-tfmock", testName+inSuffix)
+			wantFile := filepath.Join("testdata", "fmt-tfmock", testName+outSuffix)
+			gotFile := filepath.Join(tmpDir, testName+gotSuffix)
+			input, err := ioutil.ReadFile(inFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := ioutil.ReadFile(wantFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = ioutil.WriteFile(gotFile, input, 0700)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ui := cli.NewMockUi()
+			c := &FmtCommand{
+				Meta: Meta{
+					testingOverrides: metaOverridesForProvider(testProvider()),
+					Ui:               ui,
+				},
+			}
+			args := []string{gotFile}
+			if code := c.Run(args); code != 0 {
+				t.Fatalf("fmt command was unsuccessful:\n%s", ui.ErrorWriter.String())
+			}
+
+			got, err := ioutil.ReadFile(gotFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(string(want), string(got)); diff != "" {
+				t.Errorf("wrong result\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFmt_TestFiles(t *testing.T) {
+	const inSuffix = "_in.tftest.hcl"
+	const outSuffix = "_out.tftest.hcl"
+	const gotSuffix = "_got.tftest.hcl"
+	entries, err := ioutil.ReadDir("testdata/fmt-tftest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, info := range entries {
+		if info.IsDir() {
+			continue
+		}
+		filename := info.Name()
+		if !strings.HasSuffix(filename, inSuffix) {
+			continue
+		}
+		testName := filename[:len(filename)-len(inSuffix)]
+		t.Run(testName, func(t *testing.T) {
+			inFile := filepath.Join("testdata", "fmt-tftest", testName+inSuffix)
+			wantFile := filepath.Join("testdata", "fmt-tftest", testName+outSuffix)
 			gotFile := filepath.Join(tmpDir, testName+gotSuffix)
 			input, err := ioutil.ReadFile(inFile)
 			if err != nil {
